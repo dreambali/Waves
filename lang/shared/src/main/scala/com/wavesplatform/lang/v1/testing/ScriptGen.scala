@@ -9,7 +9,7 @@ trait ScriptGen {
 
   def CONST_LONGgen: Gen[(EXPR, Long)] = Gen.choose(Long.MinValue, Long.MaxValue).map(v => (CONST_LONG(v), v))
 
-  def BOOLgen(gas: Int): Gen[(EXPR,Boolean)] =
+  def BOOLgen(gas: Int): Gen[(EXPR, Boolean)] =
     if (gas > 0) Gen.oneOf(GEgen(gas - 1), GTgen(gas - 1), EQ_INTgen(gas - 1), ANDgen(gas - 1), ORgen(gas - 1), IF_BOOLgen(gas - 1))
     else Gen.const((TRUE, true))
 
@@ -17,7 +17,7 @@ trait ScriptGen {
     for {
       (i1, v1) <- INTGen((gas - 2) / 2)
       (i2, v2) <- INTGen((gas - 2) / 2)
-      if((BigInt(v1) + BigInt(v2)).isValidLong)
+      if ((BigInt(v1) + BigInt(v2)).isValidLong)
     } yield (BINARY_OP(i1, SUM_OP, i2), (v1 + v2))
 
   def INTGen(gas: Int): Gen[(EXPR, Long)] = if (gas > 0) Gen.oneOf(CONST_LONGgen, SUMgen(gas - 1), IF_INTgen(gas - 1)) else CONST_LONGgen
@@ -55,28 +55,28 @@ trait ScriptGen {
   def IF_BOOLgen(gas: Int): Gen[(EXPR, Boolean)] =
     for {
       (cnd, vcnd) <- BOOLgen((gas - 3) / 3)
-      (t, vt)   <- BOOLgen((gas - 3) / 3)
-      (f, vf)   <- BOOLgen((gas - 3) / 3)
-    } yield (IF(cnd, t, f), if(vcnd) { vt } else { vf })
+      (t, vt)     <- BOOLgen((gas - 3) / 3)
+      (f, vf)     <- BOOLgen((gas - 3) / 3)
+    } yield (IF(cnd, t, f), if (vcnd) { vt } else { vf })
 
   def IF_INTgen(gas: Int): Gen[(EXPR, Long)] =
     for {
       (cnd, vcnd) <- BOOLgen((gas - 3) / 3)
-      (t, vt)   <- INTGen((gas - 3) / 3)
-      (f, vf)   <- INTGen((gas - 3) / 3)
-    } yield (IF(cnd, t, f), if(vcnd) { vt } else { vf })
+      (t, vt)     <- INTGen((gas - 3) / 3)
+      (f, vf)     <- INTGen((gas - 3) / 3)
+    } yield (IF(cnd, t, f), if (vcnd) { vt } else { vf })
 
   def STRgen: Gen[EXPR] =
     Gen.identifier.map(CONST_STRING)
 
   def LETgen(gas: Int): Gen[LET] =
     for {
-      name  <- Gen.identifier
+      name       <- Gen.identifier
       (value, _) <- BOOLgen((gas - 3) / 3)
-    } yield LET(name, value)
+    } yield LET(NAME.VALID(name), value)
 
   def REFgen: Gen[EXPR] =
-    Gen.identifier.map(REF)
+    Gen.identifier.map(NAME.VALID).map(REF)
 
   def BLOCKgen(gas: Int): Gen[EXPR] =
     for {
@@ -100,7 +100,7 @@ trait ScriptGen {
 
   def toString(expr: EXPR): Gen[String] = expr match {
     case CONST_LONG(x)   => withWhitespaces(s"$x")
-    case REF(x)          => withWhitespaces(s"$x")
+    case REF(x)          => withWhitespaces(x.name)
     case CONST_STRING(x) => withWhitespaces(s"""\"$x\"""")
     case TRUE            => withWhitespaces("true")
     case FALSE           => withWhitespaces("false")
@@ -119,16 +119,18 @@ trait ScriptGen {
       for {
         v <- toString(let.value)
         b <- toString(body)
-      } yield s"let ${let.name} = $v $b\n"
+      } yield s"let ${let.name.name} = $v $b\n"
     case _ => ???
   }
 }
 
 trait ScriptGenParser extends ScriptGen {
   override def BOOLgen(gas: Int): Gen[(EXPR, Boolean)] = {
-    if (gas > 0) Gen.oneOf(GEgen(gas - 1), GTgen(gas - 1), EQ_INTgen(gas - 1), ANDgen(gas - 1), ORgen(gas - 1), IF_BOOLgen(gas - 1), REFgen.map(r => (r, false)))
+    if (gas > 0)
+      Gen.oneOf(GEgen(gas - 1), GTgen(gas - 1), EQ_INTgen(gas - 1), ANDgen(gas - 1), ORgen(gas - 1), IF_BOOLgen(gas - 1), REFgen.map(r => (r, false)))
     else Gen.const((TRUE, true))
   }
 
-  override def INTGen(gas: Int): Gen[(EXPR, Long)] = if (gas > 0) Gen.oneOf(CONST_LONGgen, SUMgen(gas - 1), IF_INTgen(gas - 1), REFgen.map(r => (r, 0L))) else CONST_LONGgen
+  override def INTGen(gas: Int): Gen[(EXPR, Long)] =
+    if (gas > 0) Gen.oneOf(CONST_LONGgen, SUMgen(gas - 1), IF_INTgen(gas - 1), REFgen.map(r => (r, 0L))) else CONST_LONGgen
 }

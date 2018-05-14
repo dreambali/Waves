@@ -5,12 +5,12 @@ import cats.syntax.all._
 import com.wavesplatform.lang.ExprCompiler
 import com.wavesplatform.lang.ScriptVersion.Versions.V1
 import com.wavesplatform.lang.directives.Directive
+import com.wavesplatform.lang.v1.FunctionHeader
 import com.wavesplatform.lang.v1.FunctionHeader.FunctionHeaderType
 import com.wavesplatform.lang.v1.compiler.Terms._
 import com.wavesplatform.lang.v1.evaluator.ctx.PredefFunction.FunctionTypeSignature
 import com.wavesplatform.lang.v1.parser.BinaryOperation._
 import com.wavesplatform.lang.v1.parser.{Expressions, Parser}
-import com.wavesplatform.lang.v1.FunctionHeader
 import monix.eval.Coeval
 
 import scala.util.Try
@@ -50,29 +50,35 @@ object CompilerV1 {
       op match {
         case AND_OP => setType(ctx, EitherT.pure(Expressions.IF(a, b, Expressions.FALSE)))
         case OR_OP  => setType(ctx, EitherT.pure(Expressions.IF(a, Expressions.TRUE, b)))
-        case _      => setType(ctx, EitherT.pure(Expressions.FUNCTION_CALL(opsToFunctions(op), List(a, b))))
+        case _      => setType(ctx, EitherT.pure(Expressions.FUNCTION_CALL(Expressions.NAME.VALID(opsToFunctions(op)), List(a, b))))
       }
 
     case getter: Expressions.GETTER =>
-      setType(ctx, EitherT.pure(getter.ref))
-        .subflatMap { ref =>
-          ref.tpe match {
-            case typeRef: TYPEREF =>
-              val refTpe = ctx.predefTypes.get(typeRef.name).map(Right(_)).getOrElse(Left(s"Undefined type: ${typeRef.name}"))
-              val fieldTpe = refTpe.flatMap { ct =>
-                val fieldTpe = ct.fields.collectFirst {
-                  case (fieldName, tpe) if fieldName == getter.field => tpe
+      for {
+        field <- EitherT.fromEither[Coeval](getter.field.toEither)
+        r <- setType(ctx, EitherT.pure(getter.ref))
+          .subflatMap { ref =>
+            ref.tpe match {
+              case typeRef: TYPEREF =>
+                val refTpe = ctx.predefTypes.get(typeRef.name).map(Right(_)).getOrElse(Left(s"Undefined type: ${typeRef.name}"))
+                val fieldTpe = refTpe.flatMap { ct =>
+                  val fieldTpe = ct.fields.collectFirst {
+                    case (fieldName, tpe) if fieldName == field => tpe
+                  }
+
+                  fieldTpe.map(Right(_)).getOrElse(Left(s"Undefined field ${typeRef.name}.$field"))
                 }
 
-                fieldTpe.map(Right(_)).getOrElse(Left(s"Undefined field ${typeRef.name}.${getter.field}"))
-              }
-
-              fieldTpe.right.map(tpe => GETTER(ref = ref, field = getter.field, tpe = tpe))
-            case x => Left(s"Can't access to '${getter.field}' of a primitive type $x")
+                fieldTpe.right.map(tpe => GETTER(ref = ref, field = field, tpe = tpe))
+              case x => Left(s"Can't access to '$field' of a primitive type $x")
+            }
           }
-        }
+      } yield r
 
-    case Expressions.FUNCTION_CALL(name, args) =>
+    case Expressions.FUNCTION_CALL(Expressions.NAME.INVALID(name, message), _) =>
+      EitherT.leftT[Coeval, EXPR](s"$message: $name")
+
+    case Expressions.FUNCTION_CALL(Expressions.NAME.VALID(name), args) =>
       type ResolvedArgsResult = EitherT[Coeval, String, List[EXPR]]
 
       def resolvedArguments(args: List[Expressions.EXPR]): ResolvedArgsResult = {
@@ -89,7 +95,7 @@ object CompilerV1 {
         else {
           val typedExpressionArgumentsAndTypedPlaceholders: List[(EXPR, TYPEPLACEHOLDER)] = resolvedArgs.zip(argTypes)
 
-          val typePairs = typedExpressionArgumentsAndTypedPlaceholders.map { case ((typedExpr, tph)) => (typedExpr.tpe, tph) }
+          val typePairs = typedExpressionArgumentsAndTypedPlaceholders.map { case (typedExpr, tph) => (typedExpr.tpe, tph) }
           for {
             resolvedTypeParams <- TypeInferrer(typePairs)
             resolvedResultType <- TypeInferrer.inferResultType(resultType, resolvedTypeParams)
@@ -124,24 +130,26 @@ object CompilerV1 {
       }
 
     case block: Expressions.BLOCK =>
-      import block.let
-      (ctx.varDefs.get(let.name), ctx.functionDefs.get(let.name)) match {
-        case (Some(_), _) => EitherT.leftT[Coeval, EXPR](s"Value '${let.name}' already defined in the scope")
-        case (_, Some(_)) =>
-          EitherT.leftT[Coeval, EXPR](s"Value '${let.name}' can't be defined because function with such name is predefined")
-        case (None, None) =>
-          setType(ctx, EitherT.pure(let.value)).flatMap { exprTpe =>
-            val updatedCtx = ctx.copy(varDefs = ctx.varDefs + (let.name -> exprTpe.tpe))
-            setType(updatedCtx, EitherT.pure(block.body))
-              .map { inExpr =>
-                BLOCK(
-                  let = LET(let.name, exprTpe),
-                  body = inExpr,
-                  tpe = inExpr.tpe
-                )
-              }
-          }
-      }
+      for {
+        letName <- EitherT.fromEither[Coeval](block.let.name.toEither)
+        r <- (ctx.varDefs.get(letName), ctx.functionDefs.get(letName)) match {
+          case (Some(_), _) => EitherT.leftT[Coeval, EXPR](s"Value '$letName' already defined in the scope")
+          case (_, Some(_)) =>
+            EitherT.leftT[Coeval, EXPR](s"Value '$letName' can't be defined because function with such name is predefined")
+          case (None, None) =>
+            setType(ctx, EitherT.pure(block.let.value)).flatMap { exprTpe =>
+              val updatedCtx = ctx.copy(varDefs = ctx.varDefs + (letName -> exprTpe.tpe))
+              setType(updatedCtx, EitherT.pure(block.body))
+                .map { inExpr =>
+                  BLOCK(
+                    let = LET(letName, exprTpe),
+                    body = inExpr,
+                    tpe = inExpr.tpe
+                  )
+                }
+            }
+        }
+      } yield r
 
     case ifExpr: Expressions.IF =>
       (setType(ctx, EitherT.pure(ifExpr.cond)), setType(ctx, EitherT.pure(ifExpr.ifTrue)), setType(ctx, EitherT.pure(ifExpr.ifFalse))).tupled
@@ -168,14 +176,18 @@ object CompilerV1 {
 
     case ref: Expressions.REF =>
       EitherT.fromEither {
-        ctx.varDefs
-          .get(ref.key)
-          .map { tpe =>
-            REF(key = ref.key, tpe = tpe)
-          }
-          .toRight(s"A definition of '${ref.key}' is not found")
+        ref.key.toEither.flatMap { key =>
+          ctx.varDefs
+            .get(key)
+            .map { tpe =>
+              REF(key = key, tpe = tpe)
+            }
+            .toRight(s"A definition of '${ref.key}' is not found")
+        }
       }
 
+    case Expressions.INVALID(message, _) =>
+      EitherT.leftT[Coeval, EXPR](message)
   }
 
   def apply(c: CompilerContext, expr: Expressions.EXPR): CompilationResult[EXPR] = {
