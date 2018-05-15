@@ -1,16 +1,16 @@
 package com.wavesplatform.it.sync
 
 import com.wavesplatform.crypto
-import com.wavesplatform.it.transactions.BaseTransactionSuite
-import org.scalatest.CancelAfterFailure
-import scorex.account.{AddressOrAlias, AddressScheme, PrivateKeyAccount}
-import com.wavesplatform.it.util._
 import com.wavesplatform.it.api.SyncHttpApi._
+import com.wavesplatform.it.transactions.BaseTransactionSuite
+import com.wavesplatform.it.util._
 import com.wavesplatform.lang.v1.compiler.CompilerV1
-import play.api.libs.json.JsNumber
 import com.wavesplatform.lang.v1.parser.Parser
-import com.wavesplatform.utils.dummyTypeCheckerContext
 import com.wavesplatform.state._
+import com.wavesplatform.utils.dummyTypeCheckerContext
+import org.scalatest.CancelAfterFailure
+import play.api.libs.json.JsNumber
+import scorex.account.{AddressScheme, PrivateKeyAccount}
 import scorex.transaction.Proofs
 import scorex.transaction.lease.{LeaseCancelTransactionV2, LeaseTransactionV2}
 import scorex.transaction.smart.SetScriptTransaction
@@ -46,7 +46,8 @@ class LeaseSmartContractsTestSuite extends BaseTransactionSuite with CancelAfter
 
         leaseTx || leaseCancelTx
         """.stripMargin).get.value
-      CompilerV1(dummyTypeCheckerContext, sc).explicitGet()
+      assert(sc.size == 1)
+      CompilerV1(dummyTypeCheckerContext, sc.head).explicitGet()
     }
 
     val script = ScriptV1(scriptText).explicitGet()
