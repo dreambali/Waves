@@ -4,38 +4,38 @@ import scodec.bits.ByteVector
 
 object Expressions {
 
-  sealed trait NAME {
-    def name: String
+  sealed trait PART {
+    def v: String
   }
 
-  object NAME {
-    case class VALID(name: String)                    extends NAME
-    case class INVALID(name: String, message: String) extends NAME
+  object PART {
+    case class VALID(v: String)                    extends PART
+    case class INVALID(v: String, message: String) extends PART
   }
 
-  case class LET(name: NAME, value: EXPR)
+  case class LET(name: PART, value: EXPR)
 
   sealed trait EXPR
   case class CONST_LONG(value: Long)                             extends EXPR
-  case class GETTER(ref: EXPR, field: NAME)                      extends EXPR
+  case class GETTER(ref: EXPR, field: PART)                      extends EXPR
   case class CONST_BYTEVECTOR(value: ByteVector)                 extends EXPR
-  case class CONST_STRING(value: String)                         extends EXPR
+  case class CONST_STRING(value: PART)                           extends EXPR
   case class BINARY_OP(a: EXPR, kind: BinaryOperation, b: EXPR)  extends EXPR
   case class BLOCK(let: LET, body: EXPR)                         extends EXPR
   case class IF(cond: EXPR, ifTrue: EXPR, ifFalse: EXPR)         extends EXPR
-  case class REF(key: NAME)                                      extends EXPR
+  case class REF(key: PART)                                      extends EXPR
   case object TRUE                                               extends EXPR
   case object FALSE                                              extends EXPR
-  case class FUNCTION_CALL(functionName: NAME, args: List[EXPR]) extends EXPR
+  case class FUNCTION_CALL(functionName: PART, args: List[EXPR]) extends EXPR
   case class INVALID(message: String, next: Option[EXPR] = None) extends EXPR
   object INVALID {
     def apply(message: String, next: EXPR): INVALID = INVALID(message, Some(next))
   }
 
-  implicit class NameOps(val self: NAME) extends AnyVal {
+  implicit class NameOps(val self: PART) extends AnyVal {
     def toEither: Either[String, String] = self match {
-      case Expressions.NAME.VALID(x)            => Right(x)
-      case Expressions.NAME.INVALID(x, message) => Left(s"$message: $x")
+      case Expressions.PART.VALID(x)            => Right(x)
+      case Expressions.PART.INVALID(x, message) => Left(s"$message: $x")
     }
   }
 

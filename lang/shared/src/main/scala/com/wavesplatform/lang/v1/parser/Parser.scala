@@ -1,11 +1,9 @@
 package com.wavesplatform.lang.v1.parser
 
-import Expressions._
-import BinaryOperation._
+import com.wavesplatform.lang.v1.parser.BinaryOperation._
+import com.wavesplatform.lang.v1.parser.Expressions._
 import fastparse.{WhitespaceApi, core}
 import scodec.bits.ByteVector
-
-import scala.collection.mutable
 
 object Parser {
 
@@ -41,7 +39,7 @@ object Parser {
     import ConsumeWhiteSpacesApi._
     P("\"" ~~ (escapedUnicodeSymbolP | CharPred(!"\"\\".contains(_: Char)).log("rest")).!.rep ~~ "\"")
       .map { xs =>
-        val errors         = mutable.Queue.empty[String]
+        var errors         = Vector.empty[String]
         val consumedString = new StringBuilder
 
         xs.foreach { x =>
@@ -52,8 +50,12 @@ object Parser {
               val unicodeSymbol = new String(Character.toChars(int))
               consumedString.append(unicodeSymbol)
             } catch {
-              case _: NumberFormatException    => errors.enqueue(s"Can't parse '$hexCode' as HEX string in '$x'")
-              case _: IllegalArgumentException => errors.enqueue(s"Invalid UTF-8 symbol: '$x'")
+              case _: NumberFormatException =>
+                consumedString.append(x)
+                errors :+= s"Can't parse '$hexCode' as HEX string in '$x'"
+              case _: IllegalArgumentException =>
+                consumedString.append(x)
+                errors :+= s"Invalid UTF-8 symbol: '$x'"
             }
           } else if (x.startsWith("\\")) {
             if (x.length == 2) {
@@ -65,21 +67,22 @@ object Parser {
                 case 't' => "\t"
                 case _   => x
               })
-            } else errors.enqueue(s"Invalid escaped symbol: '$x'")
+            } else errors :+= s"Invalid escaped symbol: '$x'"
           } else {
             consumedString.append(x)
           }
         }
 
-        consumedString.toString
+        if (errors.isEmpty) PART.VALID(consumedString.toString)
+        else PART.INVALID(consumedString.toString, errors.mkString(";"))
       }
       .map(CONST_STRING)
       .log("string")
   }
 
-  private val varName: P[NAME] = (char.repX(min = 1, max = 1) ~~ (digit | char).repX()).!.map { x =>
-    if (keywords.contains(x)) NAME.INVALID(x, "keywords are restricted")
-    else NAME.VALID(x)
+  private val varName: P[PART] = (char.repX(min = 1, max = 1) ~~ (digit | char).repX()).!.map { x =>
+    if (keywords.contains(x)) PART.INVALID(x, "keywords are restricted")
+    else PART.VALID(x)
   }
 
   private val numberP: P[CONST_LONG] = P(CharIn("+-").rep(max = 1) ~ digit.repX(min = 1)).!.map(t => CONST_LONG(t.toLong))
@@ -140,5 +143,5 @@ object Parser {
       }
   }
 
-  def apply(str: String): core.Parsed[Seq[EXPR], Char, String] = P(Start ~ stringP.rep(min = 1) ~ End).parse(str)
+  def apply(str: String): core.Parsed[Seq[EXPR], Char, String] = P(Start ~ expr.rep(min = 1) ~ End).parse(str)
 }

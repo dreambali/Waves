@@ -10,6 +10,7 @@ import com.wavesplatform.lang.v1.FunctionHeader.FunctionHeaderType
 import com.wavesplatform.lang.v1.compiler.Terms._
 import com.wavesplatform.lang.v1.evaluator.ctx.PredefFunction.FunctionTypeSignature
 import com.wavesplatform.lang.v1.parser.BinaryOperation._
+import com.wavesplatform.lang.v1.parser.Expressions.PART
 import com.wavesplatform.lang.v1.parser.{Expressions, Parser}
 import monix.eval.Coeval
 
@@ -43,14 +44,17 @@ object CompilerV1 {
   private def setType(ctx: CompilerContext, t: SetTypeResult[Expressions.EXPR]): SetTypeResult[EXPR] = t.flatMap {
     case x: Expressions.CONST_LONG       => EitherT.pure(CONST_LONG(x.value))
     case x: Expressions.CONST_BYTEVECTOR => EitherT.pure(CONST_BYTEVECTOR(x.value))
-    case x: Expressions.CONST_STRING     => EitherT.pure(CONST_STRING(x.value))
-    case Expressions.TRUE                => EitherT.pure(TRUE)
-    case Expressions.FALSE               => EitherT.pure(FALSE)
+
+    case Expressions.CONST_STRING(PART.VALID(x))            => EitherT.pure(CONST_STRING(x))
+    case Expressions.CONST_STRING(PART.INVALID(x, message)) => EitherT.leftT[Coeval, EXPR](s"$message: $x")
+
+    case Expressions.TRUE  => EitherT.pure(TRUE)
+    case Expressions.FALSE => EitherT.pure(FALSE)
     case Expressions.BINARY_OP(a, op, b) =>
       op match {
         case AND_OP => setType(ctx, EitherT.pure(Expressions.IF(a, b, Expressions.FALSE)))
         case OR_OP  => setType(ctx, EitherT.pure(Expressions.IF(a, Expressions.TRUE, b)))
-        case _      => setType(ctx, EitherT.pure(Expressions.FUNCTION_CALL(Expressions.NAME.VALID(opsToFunctions(op)), List(a, b))))
+        case _      => setType(ctx, EitherT.pure(Expressions.FUNCTION_CALL(Expressions.PART.VALID(opsToFunctions(op)), List(a, b))))
       }
 
     case getter: Expressions.GETTER =>
@@ -75,10 +79,10 @@ object CompilerV1 {
           }
       } yield r
 
-    case Expressions.FUNCTION_CALL(Expressions.NAME.INVALID(name, message), _) =>
+    case Expressions.FUNCTION_CALL(Expressions.PART.INVALID(name, message), _) =>
       EitherT.leftT[Coeval, EXPR](s"$message: $name")
 
-    case Expressions.FUNCTION_CALL(Expressions.NAME.VALID(name), args) =>
+    case Expressions.FUNCTION_CALL(Expressions.PART.VALID(name), args) =>
       type ResolvedArgsResult = EitherT[Coeval, String, List[EXPR]]
 
       def resolvedArguments(args: List[Expressions.EXPR]): ResolvedArgsResult = {

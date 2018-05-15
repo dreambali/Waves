@@ -67,16 +67,16 @@ trait ScriptGen {
     } yield (IF(cnd, t, f), if (vcnd) { vt } else { vf })
 
   def STRgen: Gen[EXPR] =
-    Gen.identifier.map(CONST_STRING)
+    Gen.identifier.map(PART.VALID).map(CONST_STRING)
 
   def LETgen(gas: Int): Gen[LET] =
     for {
       name       <- Gen.identifier
       (value, _) <- BOOLgen((gas - 3) / 3)
-    } yield LET(NAME.VALID(name), value)
+    } yield LET(PART.VALID(name), value)
 
   def REFgen: Gen[EXPR] =
-    Gen.identifier.map(NAME.VALID).map(REF)
+    Gen.identifier.map(PART.VALID).map(REF)
 
   def BLOCKgen(gas: Int): Gen[EXPR] =
     for {
@@ -100,8 +100,8 @@ trait ScriptGen {
 
   def toString(expr: EXPR): Gen[String] = expr match {
     case CONST_LONG(x)   => withWhitespaces(s"$x")
-    case REF(x)          => withWhitespaces(x.name)
-    case CONST_STRING(x) => withWhitespaces(s"""\"$x\"""")
+    case REF(x)          => withWhitespaces(x.v)
+    case CONST_STRING(x) => withWhitespaces(s"""\"${x.v}\"""")
     case TRUE            => withWhitespaces("true")
     case FALSE           => withWhitespaces("false")
     case BINARY_OP(x, op: BinaryOperation, y) =>
@@ -119,7 +119,7 @@ trait ScriptGen {
       for {
         v <- toString(let.value)
         b <- toString(body)
-      } yield s"let ${let.name.name} = $v $b\n"
+      } yield s"let ${let.name.v} = $v $b\n"
     case _ => ???
   }
 }

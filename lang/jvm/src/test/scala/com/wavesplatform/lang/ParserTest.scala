@@ -89,7 +89,7 @@ class ParserTest extends PropSpec with PropertyChecks with Matchers with ScriptG
       FALSE,
       OR_OP,
       FUNCTION_CALL(
-        NAME.VALID("sigVerify"),
+        PART.VALID("sigVerify"),
         List(
           CONST_BYTEVECTOR(ByteVector(ScorexBase58.decode("333").get)),
           CONST_BYTEVECTOR(ByteVector(ScorexBase58.decode("222").get)),
@@ -106,7 +106,7 @@ class ParserTest extends PropSpec with PropertyChecks with Matchers with ScriptG
   }
 
   property("string is consumed fully") {
-    parseOne(""" "   fooo    bar" """) shouldBe CONST_STRING("   fooo    bar")
+    parseOne(""" "   fooo    bar" """) shouldBe CONST_STRING(PART.VALID("   fooo    bar"))
   }
 
   property("string literal with unicode chars") {
@@ -118,15 +118,15 @@ class ParserTest extends PropSpec with PropertyChecks with Matchers with ScriptG
          | "$stringWithUnicodeChars"
          |
        """.stripMargin
-    ) shouldBe CONST_STRING(stringWithUnicodeChars)
+    ) shouldBe CONST_STRING(PART.VALID(stringWithUnicodeChars))
   }
 
   property("string literal with unicode chars in language") {
-    parseOne("\"\\u1234\"") shouldBe CONST_STRING("ሴ")
+    parseOne("\"\\u1234\"") shouldBe CONST_STRING(PART.VALID("ሴ"))
   }
 
   property("string literal with special symbols") {
-    parseOne("\"\\t\"") shouldBe CONST_STRING("\t")
+    parseOne("\"\\t\"") shouldBe CONST_STRING(PART.VALID("\t"))
   }
 
   property("reserved keywords are invalid variable names") {
@@ -134,14 +134,14 @@ class ParserTest extends PropSpec with PropertyChecks with Matchers with ScriptG
       val script = s"""let $keyword = 1
                       |true""".stripMargin
       parseOne(script) shouldBe BLOCK(
-        LET(NAME.INVALID(keyword, "keywords are restricted"), CONST_LONG(1)),
+        LET(PART.INVALID(keyword, "keywords are restricted"), CONST_LONG(1)),
         TRUE
       )
     }
 
     List("if", "then", "else", "let").foreach { keyword =>
       val script = s"$keyword + 1"
-      parseOne(script) shouldBe BINARY_OP(REF(NAME.INVALID(keyword, "keywords are restricted")), BinaryOperation.SUM_OP, CONST_LONG(1))
+      parseOne(script) shouldBe BINARY_OP(REF(PART.INVALID(keyword, "keywords are restricted")), BinaryOperation.SUM_OP, CONST_LONG(1))
     }
   }
 
@@ -168,16 +168,16 @@ class ParserTest extends PropSpec with PropertyChecks with Matchers with ScriptG
   }
 
   property("function call") {
-    parseOne("FOO(1,2)".stripMargin) shouldBe FUNCTION_CALL(NAME.VALID("FOO"), List(CONST_LONG(1), CONST_LONG(2)))
-    parseOne("FOO(X)".stripMargin) shouldBe FUNCTION_CALL(NAME.VALID("FOO"), List(REF(NAME.VALID("X"))))
+    parseOne("FOO(1,2)".stripMargin) shouldBe FUNCTION_CALL(PART.VALID("FOO"), List(CONST_LONG(1), CONST_LONG(2)))
+    parseOne("FOO(X)".stripMargin) shouldBe FUNCTION_CALL(PART.VALID("FOO"), List(REF(PART.VALID("X"))))
   }
 
   property("isDefined/extract") {
-    parseOne("isDefined(X)") shouldBe FUNCTION_CALL(NAME.VALID("isDefined"), List(REF(NAME.VALID("X"))))
+    parseOne("isDefined(X)") shouldBe FUNCTION_CALL(PART.VALID("isDefined"), List(REF(PART.VALID("X"))))
     parseOne("if(isDefined(X)) then extract(X) else Y") shouldBe IF(
-      FUNCTION_CALL(NAME.VALID("isDefined"), List(REF(NAME.VALID("X")))),
-      FUNCTION_CALL(NAME.VALID("extract"), List(REF(NAME.VALID("X")))),
-      REF(NAME.VALID("Y"))
+      FUNCTION_CALL(PART.VALID("isDefined"), List(REF(PART.VALID("X")))),
+      FUNCTION_CALL(PART.VALID("extract"), List(REF(PART.VALID("X")))),
+      REF(PART.VALID("Y"))
     )
   }
 
@@ -185,34 +185,34 @@ class ParserTest extends PropSpec with PropertyChecks with Matchers with ScriptG
     isParsed("xxx   .yyy") shouldBe true
     isParsed("xxx.  yyy") shouldBe true
 
-    parseOne("xxx.yyy") shouldBe GETTER(REF(NAME.VALID("xxx")), NAME.VALID("yyy"))
+    parseOne("xxx.yyy") shouldBe GETTER(REF(PART.VALID("xxx")), PART.VALID("yyy"))
     parseOne(
       """
         |
         | xxx.yyy
         |
       """.stripMargin
-    ) shouldBe GETTER(REF(NAME.VALID("xxx")), NAME.VALID("yyy"))
+    ) shouldBe GETTER(REF(PART.VALID("xxx")), PART.VALID("yyy"))
 
-    parseOne("xxx(yyy).zzz") shouldBe GETTER(FUNCTION_CALL(NAME.VALID("xxx"), List(REF(NAME.VALID("yyy")))), NAME.VALID("zzz"))
+    parseOne("xxx(yyy).zzz") shouldBe GETTER(FUNCTION_CALL(PART.VALID("xxx"), List(REF(PART.VALID("yyy")))), PART.VALID("zzz"))
     parseOne(
       """
         |
         | xxx(yyy).zzz
         |
       """.stripMargin
-    ) shouldBe GETTER(FUNCTION_CALL(NAME.VALID("xxx"), List(REF(NAME.VALID("yyy")))), NAME.VALID("zzz"))
+    ) shouldBe GETTER(FUNCTION_CALL(PART.VALID("xxx"), List(REF(PART.VALID("yyy")))), PART.VALID("zzz"))
 
-    parseOne("(xxx(yyy)).zzz") shouldBe GETTER(FUNCTION_CALL(NAME.VALID("xxx"), List(REF(NAME.VALID("yyy")))), NAME.VALID("zzz"))
+    parseOne("(xxx(yyy)).zzz") shouldBe GETTER(FUNCTION_CALL(PART.VALID("xxx"), List(REF(PART.VALID("yyy")))), PART.VALID("zzz"))
     parseOne(
       """
         |
         | (xxx(yyy)).zzz
         |
       """.stripMargin
-    ) shouldBe GETTER(FUNCTION_CALL(NAME.VALID("xxx"), List(REF(NAME.VALID("yyy")))), NAME.VALID("zzz"))
+    ) shouldBe GETTER(FUNCTION_CALL(PART.VALID("xxx"), List(REF(PART.VALID("yyy")))), PART.VALID("zzz"))
 
-    parseOne("{xxx(yyy)}.zzz") shouldBe GETTER(FUNCTION_CALL(NAME.VALID("xxx"), List(REF(NAME.VALID("yyy")))), NAME.VALID("zzz"))
+    parseOne("{xxx(yyy)}.zzz") shouldBe GETTER(FUNCTION_CALL(PART.VALID("xxx"), List(REF(PART.VALID("yyy")))), PART.VALID("zzz"))
     parseOne(
       """
         |
@@ -221,7 +221,7 @@ class ParserTest extends PropSpec with PropertyChecks with Matchers with ScriptG
         | }.zzz
         |
       """.stripMargin
-    ) shouldBe GETTER(FUNCTION_CALL(NAME.VALID("xxx"), List(REF(NAME.VALID("yyy")))), NAME.VALID("zzz"))
+    ) shouldBe GETTER(FUNCTION_CALL(PART.VALID("xxx"), List(REF(PART.VALID("yyy")))), PART.VALID("zzz"))
 
     parseOne(
       """
@@ -234,10 +234,10 @@ class ParserTest extends PropSpec with PropertyChecks with Matchers with ScriptG
       """.stripMargin
     ) shouldBe GETTER(
       BLOCK(
-        LET(NAME.VALID("yyy"), FUNCTION_CALL(NAME.VALID("aaa"), List(REF(NAME.VALID("bbb"))))),
-        FUNCTION_CALL(NAME.VALID("xxx"), List(REF(NAME.VALID("yyy"))))
+        LET(PART.VALID("yyy"), FUNCTION_CALL(PART.VALID("aaa"), List(REF(PART.VALID("bbb"))))),
+        FUNCTION_CALL(PART.VALID("xxx"), List(REF(PART.VALID("yyy"))))
       ),
-      NAME.VALID("zzz")
+      PART.VALID("zzz")
     )
   }
 
@@ -249,7 +249,7 @@ class ParserTest extends PropSpec with PropertyChecks with Matchers with ScriptG
     for (f <- hashFunctions) {
       parseOne(s"$f(base58'$encodedText')".stripMargin) shouldBe
         FUNCTION_CALL(
-          NAME.VALID(f),
+          PART.VALID(f),
           List(CONST_BYTEVECTOR(ByteVector(text.getBytes)))
         )
     }
@@ -264,8 +264,8 @@ class ParserTest extends PropSpec with PropertyChecks with Matchers with ScriptG
 
     parseAll(script) shouldBe Seq(
       BLOCK(
-        LET(NAME.VALID("C"), CONST_LONG(1)),
-        REF(NAME.VALID("foo"))
+        LET(PART.VALID("C"), CONST_LONG(1)),
+        REF(PART.VALID("foo"))
       ),
       INVALID("#@", CONST_LONG(2)),
       TRUE
@@ -278,7 +278,7 @@ class ParserTest extends PropSpec with PropertyChecks with Matchers with ScriptG
         |# /
         |true""".stripMargin
     parseOne(script) shouldBe BLOCK(
-      LET(NAME.VALID("C"), CONST_LONG(1)),
+      LET(PART.VALID("C"), CONST_LONG(1)),
       INVALID("#/", TRUE)
     )
   }
@@ -291,7 +291,7 @@ class ParserTest extends PropSpec with PropertyChecks with Matchers with ScriptG
     parseOne(script) shouldBe INVALID(
       "#/",
       BLOCK(
-        LET(NAME.VALID("C"), CONST_LONG(1)),
+        LET(PART.VALID("C"), CONST_LONG(1)),
         TRUE
       )
     )
@@ -304,7 +304,7 @@ class ParserTest extends PropSpec with PropertyChecks with Matchers with ScriptG
         |# /""".stripMargin
     parseAll(script) shouldBe Seq(
       BLOCK(
-        LET(NAME.VALID("C"), CONST_LONG(1)),
+        LET(PART.VALID("C"), CONST_LONG(1)),
         TRUE
       ),
       INVALID("#/")
@@ -312,7 +312,6 @@ class ParserTest extends PropSpec with PropertyChecks with Matchers with ScriptG
   }
 
   property("should parse invalid unicode symbols") {
-    println(" \"\\u1234\" ")
-    parseOne("\"\\u1234\"") shouldBe CONST_STRING("ሴ")
+    parseOne("\"\\uqwer\"") shouldBe CONST_STRING(PART.INVALID("\\uqwer", "Can't parse 'qwer' as HEX string in '\\uqwer'"))
   }
 }
