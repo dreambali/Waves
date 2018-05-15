@@ -56,36 +56,6 @@ class ParserTest extends PropSpec with PropertyChecks with Matchers with ScriptG
     }
   }
 
-  property("should produce INVALID on invalid input") {
-    val script =
-      """let C = 1
-        |# /
-        |true""".stripMargin
-    parseOne(script) shouldBe BLOCK(
-      LET(NAME.VALID("C"), CONST_LONG(1)),
-      INVALID(
-        "#/",
-        Some(TRUE)
-      )
-    )
-  }
-
-  property("show parse all input including INVALID") {
-    val script =
-      """let C = 1
-        |foo
-        |#@2
-        |true""".stripMargin
-    parseAll(script) shouldBe Seq(
-      BLOCK(
-        LET(NAME.VALID("C"), CONST_LONG(1)),
-        REF(NAME.VALID("foo"))
-      ),
-      INVALID("#@", Some(CONST_LONG(2))),
-      TRUE
-    )
-  }
-
   property("all types of multiline expressions") {
     val gas = 50
     genElementCheck(CONST_LONGgen.map(_._1))
@@ -130,8 +100,8 @@ class ParserTest extends PropSpec with PropertyChecks with Matchers with ScriptG
   }
 
   property("base58") {
-//    parseOne("base58'bQbp'") shouldBe CONST_BYTEVECTOR(ByteVector("foo".getBytes))
-//    parseOne("base58''") shouldBe CONST_BYTEVECTOR(ByteVector.empty)
+    parseOne("base58'bQbp'") shouldBe CONST_BYTEVECTOR(ByteVector("foo".getBytes))
+    parseOne("base58''") shouldBe CONST_BYTEVECTOR(ByteVector.empty)
     isParsed("base58' bQbp'\n") shouldBe false
   }
 
@@ -149,6 +119,14 @@ class ParserTest extends PropSpec with PropertyChecks with Matchers with ScriptG
          |
        """.stripMargin
     ) shouldBe CONST_STRING(stringWithUnicodeChars)
+  }
+
+  property("string literal with unicode chars in language") {
+    parseOne("\"\\u1234\"") shouldBe CONST_STRING("ሴ")
+  }
+
+  property("string literal with special symbols") {
+    parseOne("\"\\t\"") shouldBe CONST_STRING("\t")
   }
 
   property("reserved keywords are invalid variable names") {
@@ -275,5 +253,66 @@ class ParserTest extends PropSpec with PropertyChecks with Matchers with ScriptG
           List(CONST_BYTEVECTOR(ByteVector(text.getBytes)))
         )
     }
+  }
+
+  property("show parse all input including INVALID") {
+    val script =
+      """let C = 1
+        |foo
+        |#@2
+        |true""".stripMargin
+
+    parseAll(script) shouldBe Seq(
+      BLOCK(
+        LET(NAME.VALID("C"), CONST_LONG(1)),
+        REF(NAME.VALID("foo"))
+      ),
+      INVALID("#@", CONST_LONG(2)),
+      TRUE
+    )
+  }
+
+  property("should parse INVALID expressions in the middle") {
+    val script =
+      """let C = 1
+        |# /
+        |true""".stripMargin
+    parseOne(script) shouldBe BLOCK(
+      LET(NAME.VALID("C"), CONST_LONG(1)),
+      INVALID("#/", TRUE)
+    )
+  }
+
+  property("should parse INVALID expressions at start") {
+    val script =
+      """# /
+        |let C = 1
+        |true""".stripMargin
+    parseOne(script) shouldBe INVALID(
+      "#/",
+      BLOCK(
+        LET(NAME.VALID("C"), CONST_LONG(1)),
+        TRUE
+      )
+    )
+  }
+
+  property("should parse INVALID expressions at end") {
+    val script =
+      """let C = 1
+        |true
+        |# /""".stripMargin
+    parseAll(script) shouldBe Seq(
+      BLOCK(
+        LET(NAME.VALID("C"), CONST_LONG(1)),
+        TRUE
+      ),
+      INVALID("#/")
+    )
+  }
+
+  property("should parse invalid unicode symbols") {
+    println(" \"\\u1234\" ")
+    parseOne("\"\\u1234\"") shouldBe CONST_STRING("ሴ")
   }
 }

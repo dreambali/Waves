@@ -28,6 +28,9 @@ object Expressions {
   case object FALSE                                              extends EXPR
   case class FUNCTION_CALL(functionName: NAME, args: List[EXPR]) extends EXPR
   case class INVALID(message: String, next: Option[EXPR] = None) extends EXPR
+  object INVALID {
+    def apply(message: String, next: EXPR): INVALID = INVALID(message, Some(next))
+  }
 
   implicit class NameOps(val self: NAME) extends AnyVal {
     def toEither: Either[String, String] = self match {
