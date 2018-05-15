@@ -17,9 +17,7 @@ object Parser {
   import White._
   import fastparse.noApi._
 
-  private val Base58Chars = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
-  private val keywords    = Set("let", "base58", "true", "false", "if", "then", "else")
-
+  private val keywords  = Set("let", "base58", "true", "false", "if", "then", "else")
   private val lowerChar = CharIn('a' to 'z')
   private val upperChar = CharIn('A' to 'Z')
   private val char      = lowerChar | upperChar
@@ -88,7 +86,7 @@ object Parser {
     .map(CONST_STRING)
     .log("string")
 
-  private val varName: P[PART] = (char.repX(min = 1, max = 1) ~~ (digit | char).repX()).!.map { x =>
+  private val varName: P[PART[String]] = (char.repX(min = 1, max = 1) ~~ (digit | char).repX()).!.map { x =>
     if (keywords.contains(x)) PART.INVALID(x, "keywords are restricted")
     else PART.VALID(x)
   }
@@ -117,13 +115,13 @@ object Parser {
     .log("maybeGetter")
 
   private val byteVectorP: P[EXPR] =
-    P("base58'" ~/ Pass ~~ CharsWhileIn(Base58Chars, 0).! ~~ "'")
-      .map { x =>
-        if (x.isEmpty) Right(Array.emptyByteArray) else Global.base58Decode(x)
-      }
-      .map {
-        case Left(e)   => INVALID(e, None)
-        case Right(xs) => CONST_BYTEVECTOR(ByteVector(xs))
+    P("base58'" ~/ Pass ~~ CharPred(_ != '\'').repX.! ~~ "'")
+      .map { xs =>
+        val decoded = if (xs.isEmpty) Right(Array.emptyByteArray) else Global.base58Decode(xs)
+        decoded match {
+          case Left(_)  => CONST_BYTEVECTOR(PART.INVALID(xs, "Can't parse Base58 string"))
+          case Right(r) => CONST_BYTEVECTOR(PART.VALID(ByteVector(r)))
+        }
       }
 
   private val block: P[EXPR] = P(letP ~ expr).map(Function.tupled(BLOCK)).log("block")

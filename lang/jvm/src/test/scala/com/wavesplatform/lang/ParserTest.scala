@@ -99,10 +99,16 @@ class ParserTest extends PropSpec with PropertyChecks with Matchers with ScriptG
     )
   }
 
-  property("base58") {
+  property("valid non-empty base58 definition") {
     parseOne("base58'bQbp'") shouldBe CONST_BYTEVECTOR(ByteVector("foo".getBytes))
+  }
+
+  property("valid empty base58 definition") {
     parseOne("base58''") shouldBe CONST_BYTEVECTOR(ByteVector.empty)
-    isParsed("base58' bQbp'\n") shouldBe false
+  }
+
+  property("invalid base58 definition") {
+    parseOne("base58' bQbp'") shouldBe CONST_BYTEVECTOR(PART.INVALID(" bQbp", "Can't parse Base58 string"))
   }
 
   property("string is consumed fully") {
@@ -125,8 +131,25 @@ class ParserTest extends PropSpec with PropertyChecks with Matchers with ScriptG
     parseOne("\"\\u1234\"") shouldBe CONST_STRING(PART.VALID("ሴ"))
   }
 
+  property("should parse invalid unicode symbols") {
+    parseOne("\"\\uqwer\"") shouldBe CONST_STRING(PART.INVALID("\\uqwer", "Can't parse 'qwer' as HEX string in '\\uqwer'"))
+  }
+
+  property("should parse incomplete unicode symbol definition") {
+    parseOne("\"\\u12 test\"") shouldBe CONST_STRING(PART.INVALID("\\u12 test", "Incomplete UTF-8 symbol definition: '\\u12'"))
+    parseOne("\"\\u\"") shouldBe CONST_STRING(PART.INVALID("\\u", "Incomplete UTF-8 symbol definition: '\\u'"))
+  }
+
   property("string literal with special symbols") {
     parseOne("\"\\t\"") shouldBe CONST_STRING(PART.VALID("\t"))
+  }
+
+  property("should parse invalid special symbols") {
+    parseOne("\"\\ test\"") shouldBe CONST_STRING(PART.INVALID("\\ test", "Unknown escaped symbol: '\\ '"))
+  }
+
+  property("should parse incomplete special symbols") {
+    parseOne("\"foo \\\"") shouldBe CONST_STRING(PART.INVALID("foo \\", "Invalid escaped symbol: '\\'"))
   }
 
   property("reserved keywords are invalid variable names") {
@@ -309,22 +332,5 @@ class ParserTest extends PropSpec with PropertyChecks with Matchers with ScriptG
       ),
       INVALID("#/")
     )
-  }
-
-  property("should parse invalid unicode symbols") {
-    parseOne("\"\\uqwer\"") shouldBe CONST_STRING(PART.INVALID("\\uqwer", "Can't parse 'qwer' as HEX string in '\\uqwer'"))
-  }
-
-  property("should parse incomplete unicode symbol definition") {
-    parseOne("\"\\u12 test\"") shouldBe CONST_STRING(PART.INVALID("\\u12 test", "Incomplete UTF-8 symbol definition: '\\u12'"))
-    parseOne("\"\\u\"") shouldBe CONST_STRING(PART.INVALID("\\u", "Incomplete UTF-8 symbol definition: '\\u'"))
-  }
-
-  property("should parse invalid special symbols") {
-    parseOne("\"\\ test\"") shouldBe CONST_STRING(PART.INVALID("\\ test", "Unknown escaped symbol: '\\ '"))
-  }
-
-  property("should parse incomplete special symbols") {
-    parseOne("\"foo \\\"") shouldBe CONST_STRING(PART.INVALID("foo \\", "Invalid escaped symbol: '\\'"))
   }
 }

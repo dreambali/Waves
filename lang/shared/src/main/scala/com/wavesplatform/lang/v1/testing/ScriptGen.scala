@@ -4,6 +4,10 @@ import com.wavesplatform.lang.v1.parser.BinaryOperation
 import com.wavesplatform.lang.v1.parser.Expressions._
 import com.wavesplatform.lang.v1.parser.BinaryOperation._
 import org.scalacheck._
+import scodec.bits.ByteVector
+import scorex.crypto.encode.Base58
+
+import scala.reflect.ClassTag
 
 trait ScriptGen {
 
@@ -67,7 +71,7 @@ trait ScriptGen {
     } yield (IF(cnd, t, f), if (vcnd) { vt } else { vf })
 
   def STRgen: Gen[EXPR] =
-    Gen.identifier.map(PART.VALID).map(CONST_STRING)
+    Gen.identifier.map(PART.VALID[String]).map(CONST_STRING)
 
   def LETgen(gas: Int): Gen[LET] =
     for {
@@ -76,7 +80,7 @@ trait ScriptGen {
     } yield LET(PART.VALID(name), value)
 
   def REFgen: Gen[EXPR] =
-    Gen.identifier.map(PART.VALID).map(REF)
+    Gen.identifier.map(PART.VALID[String]).map(REF)
 
   def BLOCKgen(gas: Int): Gen[EXPR] =
     for {
@@ -98,12 +102,20 @@ trait ScriptGen {
       post <- whitespaces
     } yield pred + expr + post
 
+  private def toString[T](part: PART[T])(implicit ct: ClassTag[T]): String = part match {
+    case PART.VALID(x: String)      => x
+    case PART.VALID(xs: ByteVector) => Base58.encode(xs.toArray)
+    case PART.INVALID(consumed, _)  => consumed
+    case _                          => throw new RuntimeException(s"Can't stringify $part")
+  }
+
   def toString(expr: EXPR): Gen[String] = expr match {
-    case CONST_LONG(x)   => withWhitespaces(s"$x")
-    case REF(x)          => withWhitespaces(x.v)
-    case CONST_STRING(x) => withWhitespaces(s"""\"${x.v}\"""")
-    case TRUE            => withWhitespaces("true")
-    case FALSE           => withWhitespaces("false")
+    case CONST_LONG(x)       => withWhitespaces(s"$x")
+    case REF(x)              => withWhitespaces(toString(x))
+    case CONST_STRING(x)     => withWhitespaces(s"""\"${toString(x)}\"""")
+    case CONST_BYTEVECTOR(x) => withWhitespaces(s"""base58'${toString(x)}'""")
+    case TRUE                => withWhitespaces("true")
+    case FALSE               => withWhitespaces("false")
     case BINARY_OP(x, op: BinaryOperation, y) =>
       for {
         arg1 <- toString(x)
@@ -119,7 +131,7 @@ trait ScriptGen {
       for {
         v <- toString(let.value)
         b <- toString(body)
-      } yield s"let ${let.name.v} = $v $b\n"
+      } yield s"let ${toString(let.name)} = $v $b\n"
     case _ => ???
   }
 }

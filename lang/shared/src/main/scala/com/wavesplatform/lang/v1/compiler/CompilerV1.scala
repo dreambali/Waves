@@ -42,8 +42,10 @@ object CompilerV1 {
   private type SetTypeResult[T] = EitherT[Coeval, String, T]
 
   private def setType(ctx: CompilerContext, t: SetTypeResult[Expressions.EXPR]): SetTypeResult[EXPR] = t.flatMap {
-    case x: Expressions.CONST_LONG       => EitherT.pure(CONST_LONG(x.value))
-    case x: Expressions.CONST_BYTEVECTOR => EitherT.pure(CONST_BYTEVECTOR(x.value))
+    case x: Expressions.CONST_LONG => EitherT.pure(CONST_LONG(x.value))
+
+    case Expressions.CONST_BYTEVECTOR(PART.VALID(xs))           => EitherT.pure(CONST_BYTEVECTOR(xs))
+    case Expressions.CONST_BYTEVECTOR(PART.INVALID(x, message)) => EitherT.leftT[Coeval, EXPR](s"$message: $x")
 
     case Expressions.CONST_STRING(PART.VALID(x))            => EitherT.pure(CONST_STRING(x))
     case Expressions.CONST_STRING(PART.INVALID(x, message)) => EitherT.leftT[Coeval, EXPR](s"$message: $x")
