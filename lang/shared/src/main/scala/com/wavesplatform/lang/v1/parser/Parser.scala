@@ -17,21 +17,14 @@ object Parser {
   import White._
   import fastparse.noApi._
 
-  private val keywords  = Set("let", "base58", "true", "false", "if", "then", "else")
-  private val lowerChar = CharIn('a' to 'z')
-  private val upperChar = CharIn('A' to 'Z')
-  private val char      = lowerChar | upperChar
-  private val digit     = CharIn('0' to '9')
-  private val unicodeSymbolP = {
-    P("\\u" ~/ Pass ~~ (char | digit).repX(min = 0, max = 4))
-      .log("unicodeSymbol")
-  }
-
+  private val keywords       = Set("let", "base58", "true", "false", "if", "then", "else")
+  private val lowerChar      = CharIn('a' to 'z')
+  private val upperChar      = CharIn('A' to 'Z')
+  private val char           = lowerChar | upperChar
+  private val digit          = CharIn('0' to '9')
+  private val unicodeSymbolP = P("\\u" ~/ Pass ~~ (char | digit).repX(min = 0, max = 4))
   private val notEndOfString = CharPred(_ != '\"')
-
-  private val specialSymbols = {
-    P("\\" ~~ notEndOfString.?).log("specialSymbols")
-  }
+  private val specialSymbols = P("\\" ~~ notEndOfString.?)
 
   private val escapedUnicodeSymbolP = P(NoCut(unicodeSymbolP) | specialSymbols)
   private val stringP: P[EXPR] = P("\"" ~/ Pass ~~ (escapedUnicodeSymbolP | notEndOfString).!.repX ~~ "\"")
@@ -84,7 +77,6 @@ object Parser {
       else PART.INVALID(consumedString.toString, errors.mkString(";"))
     }
     .map(CONST_STRING(_))
-    .log("string")
 
   private val varName: P[PART[String]] = (char.repX(min = 1, max = 1) ~~ (digit | char).repX()).!.map { x =>
     if (keywords.contains(x)) PART.INVALID(x, "keywords are restricted")
@@ -96,7 +88,7 @@ object Parser {
   private val falseP: P[FALSE.type]  = P("false").map(_ => FALSE)
   private val bracesP: P[EXPR]       = P("(" ~ expr ~ ")")
   private val curlyBracesP: P[EXPR]  = P("{" ~ expr ~ "}")
-  private val letP: P[LET]           = P("let" ~ varName ~ "=" ~ expr).map(Function.tupled(LET(_, _))).log("let")
+  private val letP: P[LET]           = P("let" ~ varName ~ "=" ~ expr).map(Function.tupled(LET(_, _)))
   private val refP: P[REF]           = P(varName).map(REF(_))
   private val ifP: P[IF]             = P("if" ~ bracesP ~ "then" ~ expr ~ "else" ~ expr).map { case (x, y, z) => IF(x, y, z) }
 
@@ -106,13 +98,12 @@ object Parser {
     case (name, args) => FUNCTION_CALL(name, args.toList)
   }
 
-  private val extractableAtom: P[EXPR] = P(curlyBracesP | bracesP | functionCallP | refP).log("extractableAtom")
+  private val extractableAtom: P[EXPR] = P(curlyBracesP | bracesP | functionCallP | refP)
 
   private val maybeGetterP: P[EXPR] = P(extractableAtom ~ ("." ~ varName).?)
     .map {
       case (e, f) => f.fold(e)(GETTER(e, _))
     }
-    .log("maybeGetter")
 
   private val byteVectorP: P[EXPR] =
     P("base58'" ~/ Pass ~~ CharPred(_ != '\'').repX.! ~~ "'")
@@ -124,9 +115,9 @@ object Parser {
         }
       }
 
-  private val block: P[EXPR] = P(letP ~ expr).map(Function.tupled(BLOCK)).log("block")
+  private val block: P[EXPR] = P(letP ~ expr).map(Function.tupled(BLOCK))
 
-  private val invalid: P[INVALID] = P(AnyChars(1).! ~ expr.?).log("invalid").map {
+  private val invalid: P[INVALID] = P(AnyChars(1).! ~ expr.?).map {
     case (xs, next) => foldInvalid(xs, next)
   }
 
@@ -135,15 +126,15 @@ object Parser {
     case x                               => INVALID(xs, x)
   }
 
-  private val atom = P(ifP | byteVectorP | stringP | numberP | trueP | falseP | block | maybeGetterP | invalid).log("atom")
+  private val atom = P(ifP | byteVectorP | stringP | numberP | trueP | falseP | block | maybeGetterP | invalid)
 
-  private lazy val expr = P(binaryOp(opsByPriority) | atom).log("expr")
+  private lazy val expr = P(binaryOp(opsByPriority) | atom)
 
   private def binaryOp(rest: List[(String, BinaryOperation)]): P[EXPR] = rest match {
     case Nil => atom
     case (lessPriorityOp, kind) :: restOps =>
       val operand = binaryOp(restOps)
-      P(operand ~ (lessPriorityOp.!.map(_ => kind) ~ operand).rep()).log(lessPriorityOp).map {
+      P(operand ~ (lessPriorityOp.!.map(_ => kind) ~ operand).rep()).map {
         case (left: EXPR, r: Seq[(BinaryOperation, EXPR)]) =>
           r.foldLeft(left) { case (acc, (currKind, currOperand)) => BINARY_OP(acc, currKind, currOperand) }
       }
