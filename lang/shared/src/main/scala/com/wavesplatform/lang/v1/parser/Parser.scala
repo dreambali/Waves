@@ -83,7 +83,7 @@ object Parser {
       if (errors.isEmpty) PART.VALID(consumedString.toString)
       else PART.INVALID(consumedString.toString, errors.mkString(";"))
     }
-    .map(CONST_STRING)
+    .map(CONST_STRING(_))
     .log("string")
 
   private val varName: P[PART[String]] = (char.repX(min = 1, max = 1) ~~ (digit | char).repX()).!.map { x =>
@@ -96,8 +96,8 @@ object Parser {
   private val falseP: P[FALSE.type]  = P("false").map(_ => FALSE)
   private val bracesP: P[EXPR]       = P("(" ~ expr ~ ")")
   private val curlyBracesP: P[EXPR]  = P("{" ~ expr ~ "}")
-  private val letP: P[LET]           = P("let" ~ varName ~ "=" ~ expr).map(Function.tupled(LET)).log("let")
-  private val refP: P[REF]           = P(varName).map(REF)
+  private val letP: P[LET]           = P("let" ~ varName ~ "=" ~ expr).map(Function.tupled(LET(_, _))).log("let")
+  private val refP: P[REF]           = P(varName).map(REF(_))
   private val ifP: P[IF]             = P("if" ~ bracesP ~ "then" ~ expr ~ "else" ~ expr).map { case (x, y, z) => IF(x, y, z) }
 
   private val functionCallArgs: P[Seq[EXPR]] = expr.rep(sep = ",")

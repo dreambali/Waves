@@ -11,24 +11,44 @@ object Expressions {
   }
 
   case class LET(name: PART[String], value: EXPR)
+  object LET {
+    def apply(name: String, value: EXPR): LET = LET(PART.VALID(name), value)
+  }
 
   sealed trait EXPR
-  case class CONST_LONG(value: Long)                extends EXPR
+  case class CONST_LONG(value: Long) extends EXPR
+
   case class GETTER(ref: EXPR, field: PART[String]) extends EXPR
+  object GETTER {
+    def apply(ref: EXPR, field: String): GETTER = GETTER(ref, PART.VALID(field))
+  }
 
   case class CONST_BYTEVECTOR(value: PART[ByteVector]) extends EXPR
   object CONST_BYTEVECTOR {
     def apply(x: ByteVector): CONST_BYTEVECTOR = CONST_BYTEVECTOR(PART.VALID(x))
   }
 
-  case class CONST_STRING(value: PART[String])                           extends EXPR
-  case class BINARY_OP(a: EXPR, kind: BinaryOperation, b: EXPR)          extends EXPR
-  case class BLOCK(let: LET, body: EXPR)                                 extends EXPR
-  case class IF(cond: EXPR, ifTrue: EXPR, ifFalse: EXPR)                 extends EXPR
-  case class REF(key: PART[String])                                      extends EXPR
-  case object TRUE                                                       extends EXPR
-  case object FALSE                                                      extends EXPR
+  case class CONST_STRING(value: PART[String]) extends EXPR
+  object CONST_STRING {
+    def apply(x: String): CONST_STRING = CONST_STRING(PART.VALID(x))
+  }
+
+  case class BINARY_OP(a: EXPR, kind: BinaryOperation, b: EXPR) extends EXPR
+  case class BLOCK(let: LET, body: EXPR)                        extends EXPR
+  case class IF(cond: EXPR, ifTrue: EXPR, ifFalse: EXPR)        extends EXPR
+
+  case class REF(key: PART[String]) extends EXPR
+  object REF {
+    def apply(key: String): REF = REF(PART.VALID(key))
+  }
+
+  case object TRUE  extends EXPR
+  case object FALSE extends EXPR
+
   case class FUNCTION_CALL(functionName: PART[String], args: List[EXPR]) extends EXPR
+  object FUNCTION_CALL {
+    def apply(functionName: String, args: List[EXPR]): FUNCTION_CALL = FUNCTION_CALL(PART.VALID(functionName), args)
+  }
 
   case class INVALID(message: String, next: Option[EXPR] = None) extends EXPR
   object INVALID {

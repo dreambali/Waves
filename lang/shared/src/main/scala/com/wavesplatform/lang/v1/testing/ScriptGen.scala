@@ -71,7 +71,7 @@ trait ScriptGen {
     } yield (IF(cnd, t, f), if (vcnd) { vt } else { vf })
 
   def STRgen: Gen[EXPR] =
-    Gen.identifier.map(PART.VALID[String]).map(CONST_STRING)
+    Gen.identifier.map(PART.VALID[String]).map(CONST_STRING(_))
 
   def LETgen(gas: Int): Gen[LET] =
     for {
@@ -80,7 +80,7 @@ trait ScriptGen {
     } yield LET(PART.VALID(name), value)
 
   def REFgen: Gen[EXPR] =
-    Gen.identifier.map(PART.VALID[String]).map(REF)
+    Gen.identifier.map(PART.VALID[String]).map(REF(_))
 
   def BLOCKgen(gas: Int): Gen[EXPR] =
     for {
