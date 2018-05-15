@@ -27,9 +27,7 @@ class ParserTest extends PropSpec with PropertyChecks with Matchers with ScriptG
   }
 
   private def parseAll(x: String): Seq[EXPR] = Parser(x) match {
-    case Success(r, _) =>
-      println(r)
-      r
+    case Success(r, _) => r
     case e @ Failure(_, i, _) =>
       println(
         s"Can't parse (len=${x.length}): <START>\n$x\n<END>\nError: $e\nPosition ($i): '${x.slice(i, i + 1)}'\nTraced:\n${e.extra.traced.fullStack
@@ -38,9 +36,7 @@ class ParserTest extends PropSpec with PropertyChecks with Matchers with ScriptG
   }
 
   private def isParsed(x: String): Boolean = Parser(x) match {
-    case r @ Success(_, _) =>
-      println(s"code:\n$x\nexpr: $r")
-      true
+    case Success(_, _)    => true
     case Failure(_, _, _) => false
   }
 
