@@ -24,26 +24,26 @@ object Parser {
   private val upperChar = CharIn('A' to 'Z')
   private val char      = lowerChar | upperChar
   private val digit     = CharIn('0' to '9')
-  private val unicodeSymbolP = P("\\u" ~~ ((digit | char) ~~ (digit | char) ~~ (digit | char) ~~ (digit | char)))
-    .log("unicodeSymbol")
+  private val unicodeSymbolP = {
+    P("\\u" ~/ Pass ~~ (char | digit).repX(min = 0, max = 4))
+      .log("unicodeSymbol")
+  }
 
-  private val specialSymbols = P("\\" ~~ CharIn("\"\\bfnrt"))
+  private val notEndOfString = CharPred(_ != '\"')
 
-  private val escapedUnicodeSymbolP = P(unicodeSymbolP | specialSymbols)
-  private val stringP: P[EXPR] = {
-    val ConsumeWhiteSpacesApi = WhitespaceApi.Wrapper {
-      import fastparse.all._
-      NoTrace("")
-    }
+  private val specialSymbols = {
+    P("\\" ~~ notEndOfString.?).log("specialSymbols")
+  }
 
-    import ConsumeWhiteSpacesApi._
-    P("\"" ~~ (escapedUnicodeSymbolP | CharPred(!"\"\\".contains(_: Char)).log("rest")).!.rep ~~ "\"")
-      .map { xs =>
-        var errors         = Vector.empty[String]
-        val consumedString = new StringBuilder
+  private val escapedUnicodeSymbolP = P(NoCut(unicodeSymbolP) | specialSymbols)
+  private val stringP: P[EXPR] = P("\"" ~/ Pass ~~ (escapedUnicodeSymbolP | notEndOfString).!.repX ~~ "\"")
+    .map { xs =>
+      var errors         = Vector.empty[String]
+      val consumedString = new StringBuilder
 
-        xs.foreach { x =>
-          if (x.startsWith("\\u")) {
+      xs.foreach { x =>
+        if (x.startsWith("\\u")) {
+          if (x.length == 6) {
             val hexCode = x.drop(2)
             try {
               val int           = Integer.parseInt(hexCode, 16)
@@ -57,28 +57,36 @@ object Parser {
                 consumedString.append(x)
                 errors :+= s"Invalid UTF-8 symbol: '$x'"
             }
-          } else if (x.startsWith("\\")) {
-            if (x.length == 2) {
-              consumedString.append(x(1) match {
-                case 'b' => "\b"
-                case 'f' => "\f"
-                case 'n' => "\n"
-                case 'r' => "\r"
-                case 't' => "\t"
-                case _   => x
-              })
-            } else errors :+= s"Invalid escaped symbol: '$x'"
           } else {
             consumedString.append(x)
+            errors :+= s"Incomplete UTF-8 symbol definition: '$x'"
           }
+        } else if (x.startsWith("\\")) {
+          if (x.length == 2) {
+            consumedString.append(x(1) match {
+              case 'b' => "\b"
+              case 'f' => "\f"
+              case 'n' => "\n"
+              case 'r' => "\r"
+              case 't' => "\t"
+              case _ =>
+                errors :+= s"Unknown escaped symbol: '$x'"
+                x
+            })
+          } else {
+            consumedString.append(x)
+            errors :+= s"Invalid escaped symbol: '$x'"
+          }
+        } else {
+          consumedString.append(x)
         }
-
-        if (errors.isEmpty) PART.VALID(consumedString.toString)
-        else PART.INVALID(consumedString.toString, errors.mkString(";"))
       }
-      .map(CONST_STRING)
-      .log("string")
-  }
+
+      if (errors.isEmpty) PART.VALID(consumedString.toString)
+      else PART.INVALID(consumedString.toString, errors.mkString(";"))
+    }
+    .map(CONST_STRING)
+    .log("string")
 
   private val varName: P[PART] = (char.repX(min = 1, max = 1) ~~ (digit | char).repX()).!.map { x =>
     if (keywords.contains(x)) PART.INVALID(x, "keywords are restricted")

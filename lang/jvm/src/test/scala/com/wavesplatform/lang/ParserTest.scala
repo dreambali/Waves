@@ -314,4 +314,17 @@ class ParserTest extends PropSpec with PropertyChecks with Matchers with ScriptG
   property("should parse invalid unicode symbols") {
     parseOne("\"\\uqwer\"") shouldBe CONST_STRING(PART.INVALID("\\uqwer", "Can't parse 'qwer' as HEX string in '\\uqwer'"))
   }
+
+  property("should parse incomplete unicode symbol definition") {
+    parseOne("\"\\u12 test\"") shouldBe CONST_STRING(PART.INVALID("\\u12 test", "Incomplete UTF-8 symbol definition: '\\u12'"))
+    parseOne("\"\\u\"") shouldBe CONST_STRING(PART.INVALID("\\u", "Incomplete UTF-8 symbol definition: '\\u'"))
+  }
+
+  property("should parse invalid special symbols") {
+    parseOne("\"\\ test\"") shouldBe CONST_STRING(PART.INVALID("\\ test", "Unknown escaped symbol: '\\ '"))
+  }
+
+  property("should parse incomplete special symbols") {
+    parseOne("\"foo \\\"") shouldBe CONST_STRING(PART.INVALID("foo \\", "Invalid escaped symbol: '\\'"))
+  }
 }
